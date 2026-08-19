@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Dashboard do Não Consumo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#000000;
+    --panel:#06060a;
+    --line:rgba(255,255,255,.09);
+    --ink:#ffffff;
+    --ink-dim:rgba(255,255,255,.55);
+    --ink-faint:rgba(255,255,255,.26);
+    --gap:clamp(18px,5vw,28px);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html{background:var(--void);}
+  body{
+    font-family:'DM Mono',ui-monospace,monospace;
+    background:var(--void);
+    color:var(--ink);
+    min-height:100dvh;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+    position:relative;
+  }
+
+  /* ---------- camadas de atmosfera ---------- */
+  /* 1. névoa de cor: as quatro cores dos índices sangrando pelos cantos */
+  .field{position:fixed;inset:0;z-index:0;pointer-events:none;}
+  .field b{position:absolute;border-radius:50%;filter:blur(80px);display:block;}
+  .f1{width:78vw;height:78vw;left:-28vw;top:-22vh;opacity:.20;
+      background:radial-gradient(circle,#5B8CFF 0%,rgba(91,140,255,0) 70%);
+      animation:drift 22s ease-in-out infinite alternate;}
+  .f2{width:66vw;height:66vw;right:-24vw;top:22vh;opacity:.16;
+      background:radial-gradient(circle,#A98BFF 0%,rgba(169,139,255,0) 70%);
+      animation:drift 26s ease-in-out infinite alternate-reverse;}
+  .f3{width:70vw;height:70vw;left:-20vw;bottom:16vh;opacity:.13;
+      background:radial-gradient(circle,#FF9B4F 0%,rgba(255,155,79,0) 70%);
+      animation:drift 30s ease-in-out infinite alternate;}
+  .f4{width:74vw;height:74vw;right:-26vw;bottom:-18vh;opacity:.16;
+      background:radial-gradient(circle,#FF6F97 0%,rgba(255,111,151,0) 70%);
+      animation:drift 24s ease-in-out infinite alternate-reverse;}
+
+  /* 2. foco de luz que segue o cursor */
+  .spot{
+    position:fixed;z-index:1;left:0;top:0;width:520px;height:520px;
+    margin:-260px 0 0 -260px;pointer-events:none;opacity:.5;
+    background:radial-gradient(circle,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 65%);
+    transition:opacity .4s;
+  }
+
+  /* 3. grão de filme por cima de tudo */
+  .grain{
+    position:fixed;inset:-60%;z-index:9;pointer-events:none;opacity:.07;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  /* 4. vinheta: escurece as bordas e concentra o olho no centro */
+  .vignette{
+    position:fixed;inset:0;z-index:8;pointer-events:none;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.72) 100%);
+  }
+
+  .wrap{
+    position:relative;z-index:3;
+    max-width:720px;margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 34px) var(--gap) calc(env(safe-area-inset-bottom) + 44px);
+    display:flex;flex-direction:column;gap:clamp(22px,6vw,32px);
+  }
+
+  /* ---------- topo ---------- */
+  .top{display:flex;align-items:center;gap:12px;}
+  .top i{
+    flex:none;width:6px;height:6px;border-radius:50%;background:#fff;
+    box-shadow:0 0 10px #fff,0 0 24px rgba(255,255,255,.7);
+    animation:beat 2s ease-in-out infinite;
+  }
+  .title{
+    font-family:'Bricolage Grotesque','DM Mono',sans-serif;
+    font-weight:800;font-optical-sizing:auto;
+    font-size:clamp(26px,7.6vw,40px);line-height:1.0;letter-spacing:-.045em;
+    color:var(--ink-dim);
+  }
+  .title u{
+    text-decoration:none;
+    background:linear-gradient(100deg,#7FD1FF 0%,#A98BFF 34%,#FFC46B 68%,#FF8FB8 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 20px rgba(180,200,255,.45));
+  }
+
+  /* ---------- cartões ---------- */
+  .stack{display:flex;flex-direction:column;gap:clamp(16px,4.5vw,22px);}
+
+  .unit{
+    position:relative;isolation:isolate;
+    background:
+      linear-gradient(180deg,color-mix(in srgb,var(--c1) 9%,transparent) 0%,rgba(255,255,255,0) 46%),
+      var(--panel);
+    border:1px solid var(--line);
+    border-radius:22px;
+    padding:clamp(20px,5.5vw,28px);
+    overflow:hidden;
+    transition:border-color .35s,transform .35s;
+  }
+  .unit:hover{border-color:color-mix(in srgb,var(--c1) 35%,transparent);transform:translateY(-2px);}
+
+  /* filamento superior em degradê entre as duas cores do índice */
+  .unit::before{
+    content:"";position:absolute;top:0;left:10%;right:10%;height:1px;
+    background:linear-gradient(90deg,transparent,var(--c1),var(--c2),transparent);
+    box-shadow:0 0 12px var(--c1),0 0 34px var(--c2);
+  }
+  /* halo por trás do número */
+  .unit::after{
+    content:"";position:absolute;left:50%;top:46%;translate:-50% -50%;
+    width:80%;height:160px;border-radius:50%;z-index:-1;
+    background:radial-gradient(ellipse,var(--c1) 0%,var(--c2) 45%,transparent 70%);
+    opacity:.16;filter:blur(42px);
+  }
+
+  .unit__head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .unit__icon{font-size:19px;line-height:1;}
+  .unit__name{
+    font-family:'Bricolage Grotesque','DM Mono',sans-serif;font-weight:700;
+    font-optical-sizing:auto;
+    font-size:clamp(15px,4.4vw,19px);letter-spacing:-.02em;color:var(--ink);
+    text-shadow:0 0 18px color-mix(in srgb,var(--c1) 55%,transparent);
+  }
+  .unit__since{
+    margin-left:auto;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-faint);white-space:nowrap;
+  }
+
+  .count{
+    display:flex;align-items:baseline;justify-content:center;gap:12px;
+    padding:clamp(14px,4vw,20px) 0 clamp(12px,3vw,16px);
+  }
+  .count b{
+    font-weight:300;font-size:clamp(64px,21vw,108px);line-height:.92;
+    letter-spacing:-.05em;font-variant-numeric:tabular-nums;
+    background:linear-gradient(165deg,#ffffff 0%,#ffffff 32%,var(--c1) 72%,var(--c2) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:
+      drop-shadow(0 0 16px rgba(255,255,255,.45))
+      drop-shadow(0 0 46px color-mix(in srgb,var(--c1) 75%,transparent));
+  }
+  .count em{
+    font-style:normal;font-weight:400;font-size:12px;
+    letter-spacing:.3em;text-transform:uppercase;color:var(--ink-dim);
+    transform:translateY(-6px);
+  }
+
+  /* ---------- barra de marco ---------- */
+  .goal{display:flex;flex-direction:column;gap:7px;padding-bottom:clamp(14px,4vw,18px);}
+  .goal__row{
+    display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .goal__row s{text-decoration:none;color:color-mix(in srgb,var(--c1) 80%,#ffffff);}
+  .track{
+    position:relative;height:3px;border-radius:99px;
+    background:rgba(255,255,255,.08);overflow:hidden;
+  }
+  .track span{
+    position:absolute;inset:0 auto 0 0;border-radius:99px;
+    background:linear-gradient(90deg,var(--c1),var(--c2));
+    box-shadow:0 0 10px var(--c1),0 0 20px var(--c2);
+    transition:width .8s cubic-bezier(.22,1,.36,1);
+  }
+
+  /* ---------- exceção oficial (subcategoria) ---------- */
+  .exc{
+    margin-top:14px;
+    border:1px dashed color-mix(in srgb,var(--c1) 32%,transparent);
+    border-radius:14px;
+    background:color-mix(in srgb,var(--c1) 6%,transparent);
+    padding:12px 14px;
+  }
+  .exc__top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .exc__icon{font-size:15px;line-height:1;}
+  .exc__name{
+    font-family:'Bricolage Grotesque','DM Mono',sans-serif;font-weight:700;
+    font-size:12.5px;letter-spacing:-.01em;color:var(--ink);
+  }
+  .exc__tag{
+    margin-left:auto;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:color-mix(in srgb,var(--c1) 85%,#fff);
+    border:1px solid color-mix(in srgb,var(--c1) 40%,transparent);
+    border-radius:99px;padding:3px 8px;white-space:nowrap;
+  }
+  .exc__joke{margin-top:7px;font-size:10.5px;line-height:1.6;color:var(--ink-faint);}
+  .exc__log{
+    margin-top:8px;font-size:11px;line-height:1.5;color:var(--ink-dim);
+  }
+  .exc__log b{color:#fff;font-weight:500;text-shadow:0 0 14px color-mix(in srgb,var(--c1) 60%,transparent);}
+
+  /* ---------- unidades ---------- */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);}
+  .cell{padding:13px 4px 4px;text-align:center;}
+  .cell:nth-child(-n+3){border-bottom:1px solid var(--line);padding-bottom:13px;}
+  .cell b{
+    display:block;font-weight:300;font-size:clamp(19px,5.6vw,25px);
+    font-variant-numeric:tabular-nums;color:#fff;
+    text-shadow:0 0 12px rgba(255,255,255,.4),0 0 30px color-mix(in srgb,var(--c1) 55%,transparent);
+    transition:opacity .18s;
+  }
+  .cell small{
+    display:block;margin-top:5px;
+    font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .cell b.tick{animation:flare .5s ease-out;}
+
+  /* ---------- rodapé ---------- */
+  .foot{display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;}
+  .cheer{font-size:12px;line-height:1.7;color:var(--ink-dim);max-width:34ch;transition:opacity .5s;}
+  .cheer b{color:#fff;font-weight:500;text-shadow:0 0 16px rgba(255,255,255,.5);}
+  .live{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .live i{width:4px;height:4px;border-radius:50%;background:#fff;box-shadow:0 0 8px #fff;animation:beat 1s ease-in-out infinite;}
+
+  @keyframes beat{0%,100%{opacity:1;}50%{opacity:.25;}}
+  @keyframes flare{0%{opacity:.35;}100%{opacity:1;}}
+  @keyframes drift{
+    from{transform:translate3d(0,0,0) scale(1);}
+    to{transform:translate3d(4vw,3vh,0) scale(1.12);}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important;}
+    .spot{display:none;}
+  }
+</style>
+</head>
+<body>
+  <div class="field"><b class="f1"></b><b class="f2"></b><b class="f3"></b><b class="f4"></b></div>
+  <div class="spot" id="spot"></div>
+
+  <main class="wrap">
+    <header class="top">
+      <i></i>
+      <h1 class="title">Dashboard do <u>Não Consumo</u></h1>
+    </header>
+
+    <section class="stack" id="stack"></section>
+
+    <footer class="foot">
+      <p class="cheer" id="cheer">Cada segundo aqui é uma escolha que você fez.</p>
+      <span class="live"><i></i>contando agora</span>
+    </footer>
+  </main>
+
+  <div class="vignette"></div>
+  <div class="grain"></div>
+
+<script>
+  /* ============================================================
+     CONFIGURE AQUI OS TEMPORIZADORES
+     mês em JavaScript: janeiro = 0, fevereiro = 1 ... agosto = 7
+     c1 e c2 = as duas cores do degradê daquele índice
+     ============================================================ */
+  const TIMERS = [
+    {
+      key:'alcool',
+      name:'Sem Álcool',
+      icon:'🍷',
+      sinceLabel:'desde 27.01.2026',
+      start:new Date(2026,0,27,0,0,0),   // 27 de janeiro de 2026
+      c1:'#7FD1FF', c2:'#5B8CFF'
+    },
+    {
+      key:'bebida',
+      name:'Sem Bebidas Ultraprocessadas',
+      icon:'🥤',
+      sinceLabel:'desde 09.06.2026',
+      start:new Date(2026,5,9,0,0,0),    // 9 de junho de 2026
+      c1:'#A98BFF', c2:'#E58BFF'
+    },
+    {
+      key:'fritura',
+      name:'Sem Frituras',
+      icon:'🍟',
+      sinceLabel:'desde 17.08.2026',
+      start:new Date(2026,7,17,0,0,0),   // 17 de agosto de 2026
+      c1:'#FFC46B', c2:'#FF7B4F'
+    },
+    {
+      key:'doce',
+      name:'Sem Doce',
+      icon:'🍩',
+      sinceLabel:'desde 18.08.2026',
+      start:new Date(2026,7,18,0,0,0),   // 18 de agosto de 2026
+      c1:'#FF8FB8', c2:'#FF5E7E',
+      // ---- subcategoria: a única brecha permitida ----
+      excecao:{
+        icon:'🎂',
+        nome:'Bolos de Aniversário',
+        piada:'Recusar bolo em aniversário de gente querida é falta de educação, e educação vem antes da dieta. Portanto: não conta.',
+        // registre aqui o último bolo. Deixe null enquanto não houver nenhum.
+        ultimo:new Date(2026,6,31),      // 31 de julho de 2026
+        dono:''                          // opcional, ex.: 'aniversário da vó'
+      }
+    }
+  ];
+
+  // marcos de progresso, em dias
+  const MARCOS = [7,15,30,60,90,180,270,365,547,730,1095];
+  /* ========================= fim da configuração ========================= */
+
+  const pad = n => String(n).padStart(2,'0');
+
+  function diff(start, now){
+    if(now < start) now = start;
+    let y = now.getFullYear()-start.getFullYear();
+    let mo = now.getMonth()-start.getMonth();
+    let d = now.getDate()-start.getDate();
+    let h = now.getHours()-start.getHours();
+    let mi = now.getMinutes()-start.getMinutes();
+    let s = now.getSeconds()-start.getSeconds();
+    if(s<0){s+=60;mi--;}
+    if(mi<0){mi+=60;h--;}
+    if(h<0){h+=24;d--;}
+    if(d<0){
+      const pm = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+      d+=pm; mo--;
+    }
+    if(mo<0){mo+=12;y--;}
+    const totalDays = Math.floor((now - start)/86400000);
+    return {y,mo,d,h,mi,s,totalDays};
+  }
+
+  function marco(dias){
+    let anterior = 0;
+    for(const m of MARCOS){
+      if(dias < m) return {alvo:m, base:anterior};
+      anterior = m;
+    }
+    const alvo = Math.ceil((dias+1)/365)*365;
+    return {alvo, base:alvo-365};
+  }
+
+  const stack = document.getElementById('stack');
+  const refs = {};
+
+  TIMERS.forEach(t=>{
+    const el = document.createElement('article');
+    el.className = 'unit';
+    el.style.setProperty('--c1', t.c1);
+    el.style.setProperty('--c2', t.c2);
+    const excHTML = t.excecao ? `
+      <div class="exc">
+        <div class="exc__top">
+          <span class="exc__icon">${t.excecao.icon}</span>
+          <span class="exc__name">${t.excecao.nome}</span>
+          <span class="exc__tag">não conta</span>
+        </div>
+        <p class="exc__joke">${t.excecao.piada}</p>
+        <p class="exc__log" data-f="exc">—</p>
+      </div>` : '';
+    el.innerHTML = `
+      <div class="unit__head">
+        <span class="unit__icon">${t.icon}</span>
+        <h2 class="unit__name">${t.name}</h2>
+        <span class="unit__since">${t.sinceLabel}</span>
+      </div>
+      <div class="count"><b data-f="big">0</b><em>dias</em></div>
+      <div class="goal">
+        <div class="goal__row">
+          <span>próximo marco · <s data-f="alvo">30</s> dias</span>
+          <span data-f="falta">faltam 30</span>
+        </div>
+        <div class="track"><span data-f="barra" style="width:0%"></span></div>
+      </div>
+      <div class="grid">
+        <div class="cell"><b data-f="y">0</b><small>anos</small></div>
+        <div class="cell"><b data-f="mo">0</b><small>meses</small></div>
+        <div class="cell"><b data-f="d">0</b><small>dias</small></div>
+        <div class="cell"><b data-f="h">00</b><small>horas</small></div>
+        <div class="cell"><b data-f="mi">00</b><small>min</small></div>
+        <div class="cell"><b data-f="s">00</b><small>seg</small></div>
+      </div>
+      ${excHTML}`;
+    stack.appendChild(el);
+    const f = {};
+    el.querySelectorAll('[data-f]').forEach(n => f[n.dataset.f] = n);
+    refs[t.key] = {f, prev:{}};
+  });
+
+  function setVal(node, value, store, key){
+    const v = String(value);
+    if(store[key] === v) return;
+    store[key] = v;
+    node.textContent = v;
+    node.classList.remove('tick');
+    void node.offsetWidth;
+    node.classList.add('tick');
+  }
+
+  const cheerLines = [
+    d=>`Já são <b>${d}</b> dias no índice mais antigo. Isso não é sorte, é constância.`,
+    d=>`<b>${d}</b> dias sustentados por você, um de cada vez.`,
+    d=>`Mais um segundo somado. <b>${d}</b> dias inteiros de escolha.`,
+    d=>`<b>${d}</b> dias construindo a sua melhor versão. Segue firme.`,
+    d=>`O relógio corre a seu favor: <b>${d}</b> dias e contando.`
+  ];
+
+  function tick(){
+    const now = new Date();
+    let maxDays = 0;
+    TIMERS.forEach(t=>{
+      const r = refs[t.key];
+      const x = diff(t.start, now);
+      setVal(r.f.big, x.totalDays, r.prev, 'big');
+      setVal(r.f.y,  x.y,       r.prev, 'y');
+      setVal(r.f.mo, x.mo,      r.prev, 'mo');
+      setVal(r.f.d,  x.d,       r.prev, 'd');
+      setVal(r.f.h,  pad(x.h),  r.prev, 'h');
+      setVal(r.f.mi, pad(x.mi), r.prev, 'mi');
+      setVal(r.f.s,  pad(x.s),  r.prev, 's');
+
+      const m = marco(x.totalDays);
+      const pct = Math.max(0, Math.min(100,
+        ((x.totalDays - m.base) / (m.alvo - m.base)) * 100));
+      if(r.prev.alvo !== String(m.alvo)){
+        r.prev.alvo = String(m.alvo);
+        r.f.alvo.textContent = m.alvo;
+      }
+      const falta = m.alvo - x.totalDays;
+      setVal(r.f.falta, `faltam ${falta}`, r.prev, 'falta');
+      if(r.prev.pct !== pct.toFixed(1)){
+        r.prev.pct = pct.toFixed(1);
+        r.f.barra.style.width = pct.toFixed(1)+'%';
+      }
+
+      if(x.totalDays > maxDays) maxDays = x.totalDays;
+
+      if(t.excecao){
+        const html = textoExcecao(t.excecao, now);
+        if(r.prev.exc !== html){ r.prev.exc = html; r.f.exc.innerHTML = html; }
+      }
+    });
+    return maxDays;
+  }
+
+  function textoExcecao(e, now){
+    if(!e.ultimo) return 'Nenhum bolo registrado até agora. A primeira vela ainda vai ser soprada.';
+    const dias = Math.floor((now - e.ultimo)/86400000);
+    const quando = dias <= 0 ? 'foi hoje 🎉' : dias === 1 ? 'foi ontem' : `foi há <b>${dias}</b> dias`;
+    const de = e.dono ? ` (${e.dono})` : '';
+    const data = e.ultimo.toLocaleDateString('pt-BR');
+    return `Último bolo: <b>${data}</b>${de} — ${quando}.`;
+  }
+
+  let cheerIdx = 0;
+  const cheerEl = document.getElementById('cheer');
+  function rotateCheer(days){
+    cheerEl.style.opacity = 0;
+    setTimeout(()=>{
+      cheerEl.innerHTML = cheerLines[cheerIdx % cheerLines.length](days);
+      cheerEl.style.opacity = 1;
+      cheerIdx++;
+    },400);
+  }
+
+  let lastMax = tick();
+  rotateCheer(lastMax);
+  setInterval(()=>{ lastMax = tick(); }, 1000);
+  setInterval(()=>{ rotateCheer(lastMax); }, 7000);
+
+  /* foco de luz seguindo o cursor (some em telas de toque) */
+  (function(){
+    const spot = document.getElementById('spot');
+    if(!window.matchMedia('(hover:hover)').matches){ spot.style.display='none'; return; }
+    let tx=innerWidth/2, ty=innerHeight*0.35, cx=tx, cy=ty;
+    addEventListener('pointermove', e=>{ tx=e.clientX; ty=e.clientY; });
+    (function loop(){
+      cx += (tx-cx)*0.08; cy += (ty-cy)*0.08;
+      spot.style.transform = `translate3d(${cx}px,${cy}px,0)`;
+      requestAnimationFrame(loop);
+    })();
+  })();
+</script>
+</body>
+</html>
